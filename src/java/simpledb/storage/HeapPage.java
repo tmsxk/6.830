@@ -73,18 +73,18 @@ public class HeapPage implements Page {
     */
     private int getNumTuples() {        
         // some code goes here
-        return 0;
-
+        int tupleSize = td.getSize();
+        return (int) Math.floor( (BufferPool.getPageSize() * 8) / (tupleSize * 8 + 1));
     }
 
     /**
      * Computes the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      * @return the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      */
-    private int getHeaderSize() {        
-        
+    private int getHeaderSize() {
         // some code goes here
-        return 0;
+        int numTuples = getNumTuples();
+        return (int) Math.ceil(numTuples / 8);
                  
     }
     
@@ -118,7 +118,7 @@ public class HeapPage implements Page {
      */
     public HeapPageId getId() {
     // some code goes here
-    throw new UnsupportedOperationException("implement this");
+        return pid;
     }
 
     /**
@@ -202,7 +202,6 @@ public class HeapPage implements Page {
                 Field f = tuples[i].getField(j);
                 try {
                     f.serialize(dos);
-                
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -288,7 +287,11 @@ public class HeapPage implements Page {
      */
     public int getNumEmptySlots() {
         // some code goes here
-        return 0;
+        int res = 0;
+        for(int i = 0; i < numSlots; i++)
+            if(!isSlotUsed(i))
+                res++;
+        return res;
     }
 
     /**
@@ -296,7 +299,9 @@ public class HeapPage implements Page {
      */
     public boolean isSlotUsed(int i) {
         // some code goes here
-        return false;
+        int bitIdx = header[i / 8];
+        int bit = (bitIdx >> (i % 8)) & 1;
+        return bit == 1;
     }
 
     /**
@@ -313,7 +318,9 @@ public class HeapPage implements Page {
      */
     public Iterator<Tuple> iterator() {
         // some code goes here
-        return null;
+        return Arrays.stream(tuples)
+                .filter(t -> t != null)
+                .iterator();
     }
 
 }

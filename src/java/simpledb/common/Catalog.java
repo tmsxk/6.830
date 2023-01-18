@@ -48,8 +48,8 @@ public class Catalog {
      */
     public Catalog() {
         // some code goes here
-        tableMap = new ConcurrentHashMap<>();
-        nameMap = new ConcurrentHashMap<>();
+        tableMap = new HashMap<>();
+        nameMap = new HashMap<>();
     }
 
     /**

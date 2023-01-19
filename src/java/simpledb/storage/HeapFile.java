@@ -22,6 +22,9 @@ import java.util.*;
  */
 public class HeapFile implements DbFile {
 
+    File file;
+    TupleDesc tupleDesc;
+
     /**
      * Constructs a heap file backed by the specified file.
      * 
@@ -31,6 +34,8 @@ public class HeapFile implements DbFile {
      */
     public HeapFile(File f, TupleDesc td) {
         // some code goes here
+        file = f;
+        tupleDesc = td;
     }
 
     /**
@@ -40,7 +45,7 @@ public class HeapFile implements DbFile {
      */
     public File getFile() {
         // some code goes here
-        return null;
+        return file;
     }
 
     /**
@@ -54,7 +59,7 @@ public class HeapFile implements DbFile {
      */
     public int getId() {
         // some code goes here
-        throw new UnsupportedOperationException("implement this");
+        return file.getAbsoluteFile().hashCode();
     }
 
     /**
@@ -64,13 +69,28 @@ public class HeapFile implements DbFile {
      */
     public TupleDesc getTupleDesc() {
         // some code goes here
-        throw new UnsupportedOperationException("implement this");
+        return tupleDesc;
     }
 
     // see DbFile.java for javadocs
     public Page readPage(PageId pid) {
         // some code goes here
-        return null;
+        HeapPage page = null;
+        int pageSize = BufferPool.getPageSize();
+        byte[] buf = new byte[pageSize];
+
+        try (RandomAccessFile randomAccessFile = new RandomAccessFile(file, "r");){
+            randomAccessFile.seek((long) pid.getPageNumber() * pageSize);
+            if (randomAccessFile.read(buf) == -1){
+                return null;
+            }
+            page = new HeapPage((HeapPageId) pid, buf);
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return page;
     }
 
     // see DbFile.java for javadocs
@@ -84,7 +104,7 @@ public class HeapFile implements DbFile {
      */
     public int numPages() {
         // some code goes here
-        return 0;
+        return (int) file.length() / BufferPool.getPageSize();
     }
 
     // see DbFile.java for javadocs
@@ -106,7 +126,73 @@ public class HeapFile implements DbFile {
     // see DbFile.java for javadocs
     public DbFileIterator iterator(TransactionId tid) {
         // some code goes here
-        return null;
+        return new HeapFileIterator(tid, null);
+    }
+
+    public class HeapFileIterator implements DbFileIterator{
+        TransactionId tid;
+        Permissions permissions;
+        Iterator<Tuple> iterator;
+        int num;
+
+
+        public HeapFileIterator(TransactionId tid, Permissions permissions){
+            this.tid = tid;
+            this.permissions = permissions;
+            iterator = null;
+            num = 0;
+        }
+
+        @Override
+        public void open() throws DbException, TransactionAbortedException {
+            num = 0;
+            nextPage();
+        }
+
+        private void nextPage() throws TransactionAbortedException, DbException {
+            HeapPageId heapPageId = new HeapPageId(getId(), num);
+            HeapPage page = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, permissions);
+            if (page == null){
+                throw new DbException("page is null");
+            } else {
+                iterator = page.iterator();
+            }
+        }
+
+        @Override
+        public boolean hasNext() throws DbException, TransactionAbortedException {
+            if (iterator == null){
+                return false;
+            } else if (iterator.hasNext()) {
+                return true;
+            } else {
+                while(true) {
+                    num++;
+                    if (num >= numPages()) {
+                        return false;
+                    }
+                    nextPage();
+                    return iterator.hasNext();
+                }
+            }
+        }
+
+        @Override
+        public Tuple next() throws DbException, TransactionAbortedException, NoSuchElementException {
+            if(!hasNext())
+                throw new NoSuchElementException();
+            return iterator.next();
+        }
+
+        @Override
+        public void rewind() throws DbException, TransactionAbortedException {
+            open();
+        }
+
+        @Override
+        public void close() {
+            iterator = null;
+        }
     }
 
 }

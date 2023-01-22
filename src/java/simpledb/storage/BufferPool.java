@@ -11,6 +11,7 @@ import java.io.*;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -155,6 +156,12 @@ public class BufferPool {
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
+        DbFile dbFile = Database.getCatalog().getDatabaseFile(tableId);
+        List<Page> pages = dbFile.insertTuple(tid, t);
+        for(Page page: pages) {
+            page.markDirty(true, tid);
+            pageMap.put(page.getId(), page);
+        }
     }
 
     /**
@@ -174,6 +181,11 @@ public class BufferPool {
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
+        DbFile dbFile = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
+        List<Page> pages = dbFile.deleteTuple(tid, t);
+        for (Page page: pages) {
+            page.markDirty(true, tid);
+        }
     }
 
     /**

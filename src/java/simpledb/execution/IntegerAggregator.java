@@ -1,7 +1,11 @@
 package simpledb.execution;
 
+import simpledb.common.DbException;
 import simpledb.common.Type;
-import simpledb.storage.Tuple;
+import simpledb.storage.*;
+import simpledb.transaction.TransactionAbortedException;
+
+import java.util.*;
 
 /**
  * Knows how to compute some aggregate over a set of IntFields.
@@ -9,6 +13,12 @@ import simpledb.storage.Tuple;
 public class IntegerAggregator implements Aggregator {
 
     private static final long serialVersionUID = 1L;
+
+    private int groupByField;
+    private Type groupByFieldType;
+    private int aggregateField;
+    private Op what;
+    private Map<String, List<Integer>> groupFieldMap;
 
     /**
      * Aggregate constructor
@@ -27,6 +37,11 @@ public class IntegerAggregator implements Aggregator {
 
     public IntegerAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
         // some code goes here
+        this.groupByField = gbfield;
+        this.groupByFieldType = gbfieldtype;
+        this.aggregateField = afield;
+        this.what = what;
+        this.groupFieldMap = new HashMap<>();
     }
 
     /**
@@ -38,6 +53,20 @@ public class IntegerAggregator implements Aggregator {
      */
     public void mergeTupleIntoGroup(Tuple tup) {
         // some code goes here
+        if (groupByField == Aggregator.NO_GROUPING) {
+            Integer aggregateValue = ((IntField) tup.getField(aggregateField)).getValue();
+            if (!groupFieldMap.containsKey("")) {
+                groupFieldMap.put("", new ArrayList<>());
+            }
+            groupFieldMap.get("").add(aggregateValue);
+        } else {
+            String groupByKey = tup.getField(groupByField).toString();
+            Integer aggregateValue = ((IntField) tup.getField(aggregateField)).getValue();
+            if (!groupFieldMap.containsKey(groupByKey)) {
+                groupFieldMap.put(groupByKey, new ArrayList<>());
+            }
+            groupFieldMap.get(groupByKey).add(aggregateValue);
+        }
     }
 
     /**
@@ -50,8 +79,102 @@ public class IntegerAggregator implements Aggregator {
      */
     public OpIterator iterator() {
         // some code goes here
-        throw new
-        UnsupportedOperationException("please implement me for lab2");
+        return new IntegerAggregatorOpIterator();
     }
 
+    private class IntegerAggregatorOpIterator implements OpIterator {
+        private List<Tuple> res;
+        private Iterator<Tuple> it;
+
+        public IntegerAggregatorOpIterator() {
+            res = new ArrayList<>();
+            if (groupByField == Aggregator.NO_GROUPING) {
+                Tuple t = new Tuple(getTupleDesc());
+                Field aggregateValue = new IntField(calculate(groupFieldMap.get("")));
+                t.setField(0, aggregateValue);
+                res.add(t);
+            } else {
+                for (Map.Entry<String, List<Integer>> entry: groupFieldMap.entrySet()) {
+                    Tuple t = new Tuple(getTupleDesc());
+                    Field groupValue = null;
+                    if (groupByFieldType == Type.INT_TYPE) {
+                        groupValue = new IntField(Integer.parseInt(entry.getKey()));
+                    } else {
+                        groupValue = new StringField(entry.getKey(), entry.getKey().length());
+                    }
+                    Field aggregateValue = new IntField(calculate(entry.getValue()));
+                    t.setField(0, groupValue);
+                    t.setField(1, aggregateValue);
+                    res.add(t);
+                }
+            }
+        }
+
+        private int calculate(List<Integer> values) {
+            int res = 0;
+            switch (what) {
+                case MIN:
+                    res = values.stream().mapToInt(x -> x).min().getAsInt();
+                    break;
+                case MAX:
+                    res = values.stream().mapToInt(x -> x).max().getAsInt();
+                    break;
+                case SUM:
+                    res = values.stream().mapToInt(x -> x).sum();
+                    break;
+                case AVG:
+                    res = (int) values.stream().mapToInt(x -> x).average().getAsDouble();
+                    break;
+                case COUNT:
+                    res = (int) values.stream().mapToInt(x -> x).count();
+                    break;
+                default:
+                    throw new UnsupportedOperationException("unsupported aggregate operator");
+            }
+            return res;
+        }
+
+        @Override
+        public void open() throws DbException, TransactionAbortedException {
+            it = res.iterator();
+        }
+
+        @Override
+        public boolean hasNext() throws DbException, TransactionAbortedException {
+            if (it == null) {
+                throw new IllegalStateException("IntegerAggregator not open");
+            }
+            return it.hasNext();
+        }
+
+        @Override
+        public Tuple next() throws DbException, TransactionAbortedException, NoSuchElementException {
+            if (it == null) {
+                throw new IllegalStateException("IntegerAggregator not open");
+            }
+            return it.next();
+        }
+
+        @Override
+        public void rewind() throws DbException, TransactionAbortedException {
+            if (it == null) {
+                throw new IllegalStateException("IntegerAggregator not open");
+            }
+            it = res.iterator();
+        }
+
+        @Override
+        public TupleDesc getTupleDesc() {
+            if (groupByField == Aggregator.NO_GROUPING) {
+                return new TupleDesc(new Type[]{Type.INT_TYPE});
+            } else {
+                return new TupleDesc(new Type[]{groupByFieldType, Type.INT_TYPE});
+            }
+        }
+
+        @Override
+        public void close() {
+            it = null;
+        }
+    }
 }

@@ -88,7 +88,7 @@ public class BufferPool {
             DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
             retrievedPage = dbFile.readPage(pid);
             if(pageMap.size() == numPages)
-                throw new DbException("Page in buffer pool is full");
+                evictPage();
             pageMap.put(pid, retrievedPage);
         }
         return retrievedPage;
@@ -196,7 +196,12 @@ public class BufferPool {
     public synchronized void flushAllPages() throws IOException {
         // some code goes here
         // not necessary for lab1
-
+        for (Map.Entry<PageId, Page> entry: pageMap.entrySet()) {
+            Page page = entry.getValue();
+            if (page.isDirty() != null) {
+                flushPage(entry.getKey());
+            }
+        }
     }
 
     /** Remove the specific page id from the buffer pool.
@@ -210,15 +215,23 @@ public class BufferPool {
     public synchronized void discardPage(PageId pid) {
         // some code goes here
         // not necessary for lab1
+        pageMap.remove(pid);
     }
 
     /**
      * Flushes a certain page to disk
      * @param pid an ID indicating the page to flush
      */
-    private synchronized  void flushPage(PageId pid) throws IOException {
+    private synchronized void flushPage(PageId pid) throws IOException {
         // some code goes here
         // not necessary for lab1
+        Page page = pageMap.get(pid);
+        if (page != null) {
+            if (page.isDirty() != null) {
+                DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
+                dbFile.writePage(page);
+            }
+        }
     }
 
     /** Write all pages of the specified transaction to disk.
@@ -232,9 +245,15 @@ public class BufferPool {
      * Discards a page from the buffer pool.
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
-    private synchronized  void evictPage() throws DbException {
+    private synchronized void evictPage() throws DbException {
         // some code goes here
         // not necessary for lab1
+        PageId pageId = pageMap.keySet().iterator().next();
+        try {
+            flushPage(pageId);
+            discardPage(pageId);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
-
 }

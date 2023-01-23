@@ -256,6 +256,7 @@ public class HeapPage implements Page {
             throw new DbException("this tuple is not on this page, or tuple slot is already empty");
         }
         markSlotUsed(tupleNo, false);
+        tuples[tupleNo] = null;
     }
 
     /**

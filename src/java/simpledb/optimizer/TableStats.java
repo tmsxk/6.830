@@ -163,7 +163,7 @@ public class TableStats {
      */
     public double estimateScanCost() {
         // some code goes here
-        return numPages * ioCostPerPage;
+        return numPages * ioCostPerPage * 2;
     }
 
     /**

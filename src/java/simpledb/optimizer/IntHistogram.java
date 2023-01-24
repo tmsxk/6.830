@@ -6,6 +6,12 @@ import simpledb.execution.Predicate;
  */
 public class IntHistogram {
 
+    private int[] buckets;
+    private int min;
+    private int max;
+    private double width;
+    private int ntups;
+
     /**
      * Create a new IntHistogram.
      * 
@@ -24,6 +30,11 @@ public class IntHistogram {
      */
     public IntHistogram(int buckets, int min, int max) {
     	// some code goes here
+        this.buckets = new int[buckets];
+        this.min = min;
+        this.max = max;
+        this.ntups = 0;
+        this.width = Math.max(1.0, (1.0 + max - min) / this.buckets.length);
     }
 
     /**
@@ -32,6 +43,9 @@ public class IntHistogram {
      */
     public void addValue(int v) {
     	// some code goes here
+        int index = Math.min((int) ((v - min) / width), buckets.length - 1);
+        ntups++;
+        buckets[index]++;
     }
 
     /**
@@ -47,6 +61,32 @@ public class IntHistogram {
     public double estimateSelectivity(Predicate.Op op, int v) {
 
     	// some code goes here
+        int index = Math.min((int) ((v - min) / width), buckets.length - 1);
+        switch (op) {
+            case EQUALS:
+                if (index < 0 || index >= buckets.length) return 0.0;
+                else return (buckets[index] / width) / ntups;
+            case NOT_EQUALS:
+                return 1 - estimateSelectivity(Predicate.Op.EQUALS, v);
+            case GREATER_THAN:
+                if (v <= min) return 1.0;
+                if (v >= max) return 0.0;
+                int cnt = 0;
+                for (int i = index + 1; i < buckets.length; i++) {
+                    cnt += buckets[i];
+                }
+                double b_f = 1.0 * buckets[index] / ntups;
+                double b_part = ((index + 1) * width - v) / width;
+                return b_f * b_part + 1.0 * cnt / ntups;
+            case GREATER_THAN_OR_EQ:
+                if (v < min) return 1.0;
+                if (v > max) return 0.0;
+                return estimateSelectivity(Predicate.Op.GREATER_THAN, v - 1);
+            case LESS_THAN:
+                return 1.0 - estimateSelectivity(Predicate.Op.GREATER_THAN_OR_EQ, v);
+            case LESS_THAN_OR_EQ:
+                return 1.0 - estimateSelectivity(Predicate.Op.GREATER_THAN, v);
+        }
         return -1.0;
     }
     
@@ -61,7 +101,9 @@ public class IntHistogram {
     public double avgSelectivity()
     {
         // some code goes here
-        return 1.0;
+        int sum = 0;
+        for (int b : buckets) sum += b;
+        return 1.0 * sum / ntups;
     }
     
     /**

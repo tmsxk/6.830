@@ -48,6 +48,9 @@ public class LockManager {
     }
 
     public synchronized Boolean acquireLock(TransactionId tid, PageId pid, Permissions permissions) {
+        if (tid == null) {
+            return true;
+        }
         SimpleDBLock lock = new SimpleDBLock(tid, permissions);
         List<SimpleDBLock> locks = lockCache.get(pid);
         if (locks == null || locks.size() == 0) {

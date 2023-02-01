@@ -3,15 +3,12 @@ package simpledb.storage;
 import simpledb.common.Database;
 import simpledb.common.Permissions;
 import simpledb.common.DbException;
-import simpledb.common.DeadlockException;
-import simpledb.transaction.LockManager;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
 import java.io.*;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * BufferPool manages the reading and writing of pages into memory from
@@ -38,6 +35,7 @@ public class BufferPool {
     private int numPages;
     private Map<PageId, Page> pageMap;
     private LockManager lockManager;
+    private DependencyGraph dependencyGraph;
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -49,6 +47,7 @@ public class BufferPool {
         this.numPages = numPages;
         pageMap = new LinkedHashMap<>();
         lockManager = new LockManager();
+        dependencyGraph = new DependencyGraph();
     }
     
     public static int getPageSize() {
@@ -85,8 +84,28 @@ public class BufferPool {
         // some code goes here
 
         boolean acquired = false;
+        boolean blocked = false;
+        Set<TransactionId> holding = null;
         while (!acquired) {
+            holding = lockManager.peekLock(pid);
+            if (!holding.isEmpty()) {
+                for (TransactionId t: holding) {
+                    if (!t.equals(tid)) {
+                        if (!dependencyGraph.addDependency(tid, t)) {
+                            throw new TransactionAbortedException();
+                        }
+                        blocked = true;
+                    }
+                }
+            }
             acquired = lockManager.acquireLock(tid, pid, perm);
+        }
+        if (blocked) {
+            for (TransactionId t: holding) {
+                if (!t.equals(tid)) {
+                    dependencyGraph.removeDependency(tid, t);
+                }
+            }
         }
 
         Page retrievedPage = pageMap.get(pid);

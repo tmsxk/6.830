@@ -289,6 +289,8 @@ public class BufferPool {
         if (page != null) {
             if (page.isDirty() != null) {
                 DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
+                Database.getLogFile().logWrite(page.isDirty(), page.getBeforeImage(), page);
+                Database.getLogFile().force();
                 dbFile.writePage(page);
             }
         }
@@ -304,12 +306,11 @@ public class BufferPool {
             Page page = pageMap.get(it.next());
             if (page != null && page.isDirty() != null && page.isDirty().equals(tid)) {
                 DbFile dbFile = Database.getCatalog().getDatabaseFile(page.getId().getTableId());
-                try {
-                    page.markDirty(false, null);
-                    dbFile.writePage(page);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+                Database.getLogFile().logWrite(page.isDirty(), page.getBeforeImage(), page);
+                Database.getLogFile().force();
+                page.markDirty(false, null);
+                dbFile.writePage(page);
+                page.setBeforeImage();
             }
         }
     }
